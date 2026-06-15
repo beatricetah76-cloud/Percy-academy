@@ -1,0 +1,163 @@
+import streamlit as st
+import random
+import time
+
+# --- APP CONFIGURATION ---
+st.set_page_config(page_title="Percy Academy", page_icon="🔬", layout="wide")
+
+# --- INITIALIZE DATABASE / STATE ---
+if 'xp' not in st.session_state:
+    st.session_state.xp = 0
+if 'badges' not in st.session_state:
+    st.session_state.badges = []
+if 'forum_posts' not in st.session_state:
+    st.session_state.forum_posts = [{"user": "John_Doe", "msg": "How do I remember the noble gases?"}]
+if 'completed_quizzes' not in st.session_state:
+    st.session_state.completed_quizzes = []
+if 'completed_experiments' not in st.session_state:
+    st.session_state.completed_experiments = []
+
+# --- CONTENT DATA ---
+CONTENT = {
+    "Physics": {
+        "lesson": "Newton's Third Law: For every action, there is an equal and opposite reaction.",
+        "experiment": "The Balloon Rocket: Tape a straw to a balloon on a string and watch it propel!",
+        "quiz_q": "If a bird pushes down on air, the air pushes ___ on the bird.",
+        "options": ["Down", "Up", "Sideways"],
+        "correct": "Up",
+        "fact": "A neutron star is so dense that a teaspoon of it would weigh 6 billion tons."
+    },
+    "Chemistry": {
+        "lesson": "Exothermic Reactions: A chemical reaction that releases energy through light or heat.",
+        "experiment": "Elephant Toothpaste: Mix yeast, hydrogen peroxide, and dish soap.",
+        "quiz_q": "Which of these is an example of an exothermic reaction?",
+        "options": ["Ice melting", "A candle flame", "Photosynthesis"],
+        "correct": "A candle flame",
+        "fact": "There is enough gold inside Earth to coat the entire surface in 1.5 feet of it."
+    },
+    "Biology": {
+        "lesson": "The Mitochondria: Known as the powerhouse of the cell, it generates ATP.",
+        "experiment": "DNA Extraction: Mash a strawberry with salt and alcohol to see DNA strands.",
+        "quiz_q": "What molecule does the mitochondria produce for energy?",
+        "options": ["Glucose", "ATP", "Chlorophyll"],
+        "correct": "ATP",
+        "fact": "The human body has more bacterial cells than human cells."
+    }
+}
+
+# --- CACHED FUNCTIONS ---
+@st.cache_data(ttl=86400)  # Keeps the fact frozen for 24 hours instead of changing on every click
+def get_daily_fact():
+    random_subject = random.choice(list(CONTENT.keys()))
+    return CONTENT[random_subject]['fact']
+
+# --- SHARED FUNCTIONS ---
+def add_xp(amount):
+    st.session_state.xp += amount
+    if st.session_state.xp >= 100 and "Science Apprentice" not in st.session_state.badges:
+        st.session_state.badges.append("Science Apprentice")
+        st.toast("🏆 New Badge Unlocked: Science Apprentice!")
+
+def handle_forum_submission():
+    text = st.session_state.forum_input_text
+    if text:
+        st.session_state.forum_posts.append({"user": "You", "msg": text})
+        st.session_state.forum_input_text = ""  # Clears the form input area safely
+
+# --- SIDEBAR NAVIGATION ---
+st.sidebar.title("🚀 Percy Academy")
+st.sidebar.markdown("---")
+page = st.sidebar.radio("Navigate", ["Dashboard", "Science Lessons", "Practical Experiments", "Community Forum"])
+
+# --- DASHBOARD PAGE ---
+if page == "Dashboard":
+    st.title("👨‍🔬 Student Dashboard")
+
+    # Progress Tracking
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Total XP", f"{st.session_state.xp}")
+    col2.metric("Badges Earned", len(st.session_state.badges))
+    col3.metric("Level", (st.session_state.xp // 500) + 1)
+
+    st.markdown("### Your Achievements")
+    if st.session_state.badges:
+        for badge in st.session_state.badges:
+            st.success(f"🏅 {badge}")
+    else:
+        st.info("Complete quizzes or experiments to earn your first badge!")
+
+    st.markdown("---")
+    st.markdown("### 💡 Daily Trivial Fact")
+    st.info(get_daily_fact())
+
+# --- LESSONS PAGE ---
+elif page == "Science Lessons":
+    subject = st.selectbox("Choose a Subject", ["Physics", "Chemistry", "Biology"])
+    st.title(f"{subject} Notes")
+
+    # Lesson Details
+    st.markdown(f"### Understanding {subject}")
+    st.write(CONTENT[subject]['lesson'])
+
+    # Diagram Placeholder
+    st.info(f"🖼️ [Interactive Diagram of {subject} Principles]")
+
+    st.markdown("---")
+    st.subheader("📝 Quick Quiz")
+    q = CONTENT[subject]['quiz_q']
+    
+    # Disable options if already completed
+    is_quiz_done = subject in st.session_state.completed_quizzes
+    answer = st.radio(q, CONTENT[subject]['options'], disabled=is_quiz_done)
+
+    if st.button("Submit Answer", disabled=is_quiz_done):
+        if answer == CONTENT[subject]['correct']:
+            st.success("Correct! +50 XP")
+            st.session_state.completed_quizzes.append(subject)
+            add_xp(50)
+            st.rerun()
+        else:
+            st.error("Try again! Review the notes above.")
+            
+    if is_quiz_done:
+        st.success("🎉 You have already completed this quiz and claimed your XP!")
+
+# --- EXPERIMENTS PAGE ---
+elif page == "Practical Experiments":
+    st.title("🧪 The Practical Lab")
+    subject = st.radio("Subject", ["Physics", "Chemistry", "Biology"])
+
+    st.markdown(f"### Current Experiment: {CONTENT[subject]['experiment']}")
+    st.video("https://youtube.com")  # Placeholder for experiment video
+
+    is_exp_done = subject in st.session_state.completed_experiments
+
+    safety_check = st.checkbox("I have completed this experiment safely.", disabled=is_exp_done, value=is_exp_done)
+    
+    if st.button("Claim XP", disabled=not safety_check or is_exp_done):
+        st.balloons()
+        st.session_state.completed_experiments.append(subject)
+        add_xp(100)
+        st.rerun()
+        
+    if is_exp_done:
+        st.success("🎉 Experiment log complete. 100 XP added.")
+
+# --- FORUM PAGE ---
+elif page == "Community Forum":
+    st.title("💬 Student Community")
+
+    # Post a new message form
+    with st.form("forum_form", clear_on_submit=True):
+        st.text_input("Ask a question...", key="forum_input_text")
+        st.form_submit_button("Post", on_click=handle_forum_submission)
+
+    # Display posts
+    for post in reversed(st.session_state.forum_posts):
+        with st.chat_message(post['user']):
+            st.write(post['msg'])
+
+# --- OFFLINE ACCESS & DARK MODE NOTE ---
+st.sidebar.markdown("---")
+st.sidebar.caption("🌙 Dark Mode: Enabled by System")
+st.sidebar.caption("📁 Offline Access: Enabled")
